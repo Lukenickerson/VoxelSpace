@@ -1,103 +1,103 @@
 (function(){
-	
+
 "use strict";
 
 // ---------------------------------------------
 // Viewer information
 
 const camera = {
-	x:        512., // x position on the map
-	y:        800., // y position on the map
-	height:    78., // height of the camera
-	angle:      0., // direction of the camera
-	horizon:  100., // horizon position (look up and down)
-	distance: 800   // distance of map
+	x:			512., // x position on the map
+	y:			800., // y position on the map
+	height:		78., // height of the camera
+	angle:		0., // direction of the camera
+	horizon:	100., // horizon position (look up and down)
+	distance:	800   // distance of map
 };
 
 // ---------------------------------------------
 // Landscape data
 
-var map = {
-	width:    1024,
-	height:   1024,
-	shift:    10,  // power of two: 2^10 = 1024
-	altitude: new Uint8Array(1024*1024), // 1024 * 1024 byte array with height information
-	color:    new Uint32Array(1024*1024) // 1024 * 1024 int array with RGB colors
+const map = {
+	width:		1024,
+	height:		1024,
+	shift:		10,  // power of two: 2^10 = 1024
+	altitude:	new Uint8Array(1024*1024), // 1024 * 1024 byte array with height information
+	color:		new Uint32Array(1024*1024) // 1024 * 1024 int array with RGB colors
 };
 
 // ---------------------------------------------
 // Screen data
 
-var screendata = {
-	canvas:    null,
-	context:   null,
-	imagedata: null,
+const screen = {
+	canvas:		null,
+	context:	null,
+	imageData:	null,
 
-	bufarray:  null, // color data
-	buf8:      null, // the same array but with bytes
-	buf32:     null, // the same array but with 32-Bit words
+	bufArray:	null, // color data
+	buf8:		null, // the same array but with bytes
+	buf32:		null, // the same array but with 32-Bit words
 
-	backgroundcolor: 0xFFE09090
+	backgroundColor: 0xFFE09090
 };
 
 // ---------------------------------------------
 // Keyboard and mouse interaction
 
-var input = {
-	forwardbackward: 0,
-	leftright:       0,
-	updown:          0,
-	lookup:          false,
-	lookdown:        false,
-	mouseposition:   null,
-	keypressed:      false
+const input = {
+	forwardBackward: 0,
+	leftRight:       0,
+	upDown:          0,
+	lookUp:          false,
+	lookDown:        false,
+	mousePosition:   null,
+	keyPressed:      false
 };
 
-let updaterunning = false;
-
+let updateRunning = false;
 let time = new Date().getTime();
+let timeLastFrame = new Date().getTime(); // for fps display
+let frames = 0;
 
+init();
 
-// for fps display
-var timelastframe = new Date().getTime();
-var frames = 0;
+return;
 
 // Update the camera for next frame. Dependent on keypresses
-function UpdateCamera()
-{
-	var current = new Date().getTime();
+function updateCamera() {
+	const current = new Date().getTime();
+	const movementScale = 0.03;
+	const deltaTime = current - time;
+	const deltaMovement = deltaTime * movementScale;
 
-	input.keypressed = false;
-	if (input.leftright != 0)
-	{
-		camera.angle += input.leftright*0.1*(current-time)*0.03;
-		input.keypressed = true;
+	input.keyPressed = false;
+	if (input.leftRight != 0) {
+		camera.angle += input.leftRight * 0.1 * deltaMovement;
+		input.keyPressed = true;
 	}
-	if (input.forwardbackward != 0)
-	{
-		camera.x -= input.forwardbackward * Math.sin(camera.angle) * (current-time)*0.03;
-		camera.y -= input.forwardbackward * Math.cos(camera.angle) * (current-time)*0.03;
-		input.keypressed = true;
+	if (input.forwardBackward != 0) {
+		camera.x -= input.forwardBackward * Math.sin(camera.angle) * deltaMovement;
+		camera.y -= input.forwardBackward * Math.cos(camera.angle) * deltaMovement;
+		input.keyPressed = true;
 	}
-	if (input.updown != 0)
-	{
-		camera.height += input.updown * (current-time)*0.03;
-		input.keypressed = true;
+	if (input.upDown != 0) {
+		camera.height += input.upDown * deltaMovement;
+		input.keyPressed = true;
 	}
-	if (input.lookup)
-	{
-		camera.horizon += 2 * (current-time)*0.03;
-		input.keypressed = true;
+	if (input.lookUp) {
+		camera.horizon += 2 * deltaMovement;
+		input.keyPressed = true;
 	}
-	if (input.lookdown)
-	{
-		camera.horizon -= 2 * (current-time)*0.03;
-		input.keypressed = true;
+	if (input.lookDown) {
+		camera.horizon -= 2 * deltaMovement;
+		input.keyPressed = true;
 	}
 
 	// Collision detection. Don't fly below the surface.
-	var mapoffset = ((Math.floor(camera.y) & (map.width-1)) << map.shift) + (Math.floor(camera.x) & (map.height-1))|0;
-	if ((map.altitude[mapoffset]+10) > camera.height) camera.height = map.altitude[mapoffset] + 10;
+	const mapOffset = ((Math.floor(camera.y) & (map.width-1)) << map.shift) + (Math.floor(camera.x) & (map.height-1))|0;
+	const minZ = map.altitude[mapOffset] + 10;
+	if (minZ > camera.height) {
+		camera.height = minZ;
+	}
 
 	time = current;
 
@@ -108,131 +108,119 @@ function UpdateCamera()
 // ---------------------------------------------
 // Keyboard and mouse event handlers
 
-function GetMousePosition(e)
-{
+function getMousePosition(e) {
 	// fix for Chrome
-	if (e.type.startsWith('touch'))
-	{
+	if (e.type.startsWith('touch')) {
 		return [e.targetTouches[0].pageX, e.targetTouches[0].pageY];
-	} else
-	{
+	} else {
 		return [e.pageX, e.pageY];
 	}
 }
 
-
-function DetectMouseDown(e)
-{
-	input.forwardbackward = 3.;
-	input.mouseposition = GetMousePosition(e);
+function detectMouseDown(e) {
+	input.forwardBackward = 3.;
+	input.mousePosition = getMousePosition(e);
 	time = new Date().getTime();
 
-	if (!updaterunning) Draw();
+	if (!updateRunning) draw();
 	return;
 }
 
-function DetectMouseUp()
-{
-	input.mouseposition = null;
-	input.forwardbackward = 0;
-	input.leftright = 0;
-	input.updown = 0;
+function detectMouseUp() {
+	input.mousePosition = null;
+	input.forwardBackward = 0;
+	input.leftRight = 0;
+	input.upDown = 0;
 	return;
 }
 
-function DetectMouseMove(e)
-{
+function detectMouseMove(e) {
 	e.preventDefault();
-	if (input.mouseposition == null) return;
-	if (input.forwardbackward == 0) return;
+	if (input.mousePosition == null) { return; }
+	if (input.forwardBackward == 0) { return; }
 
-	var currentMousePosition = GetMousePosition(e);
+	const currentMousePosition = getMousePosition(e);
 
-	input.leftright = (input.mouseposition[0] - currentMousePosition[0]) / window.innerWidth * 2;
-	camera.horizon  = 100 + (input.mouseposition[1] - currentMousePosition[1]) / window.innerHeight * 500;
-	input.updown    = (input.mouseposition[1] - currentMousePosition[1]) / window.innerHeight * 10;
+	input.leftRight = (input.mousePosition[0] - currentMousePosition[0]) / window.innerWidth * 2;
+	camera.horizon  = 100 + (input.mousePosition[1] - currentMousePosition[1]) / window.innerHeight * 500;
+	input.upDown    = (input.mousePosition[1] - currentMousePosition[1]) / window.innerHeight * 10;
 }
 
-
-function DetectKeysDown(e)
-{
-	switch(e.keyCode)
-	{
+function detectKeysDown(e) {
+	switch(e.keyCode) {
 	case 37:    // left cursor
 	case 65:    // a
-		input.leftright = +1.;
+		input.leftRight = +1.;
 		break;
 	case 39:    // right cursor
 	case 68:    // d
-		input.leftright = -1.;
+		input.leftRight = -1.;
 		break;
 	case 38:    // cursor up
 	case 87:    // w
-		input.forwardbackward = 3.;
+		input.forwardBackward = 3.;
 		break;
 	case 40:    // cursor down
 	case 83:    // s
-		input.forwardbackward = -3.;
+		input.forwardBackward = -3.;
 		break;
 	case 82:    // r
-		input.updown = +2.;
+		input.upDown = +2.;
 		break;
 	case 70:    // f
-		input.updown = -2.;
+		input.upDown = -2.;
 		break;
 	case 69:    // e
-		input.lookup = true;
+		input.lookUp = true;
 		break;
 	case 81:    //q
-		input.lookdown = true;
+		input.lookDown = true;
 		break;
 	default:
 		return;
 		break;
 	}
 
-	if (!updaterunning) {
+	if (!updateRunning) {
 		time = new Date().getTime();
-		Draw();
+		draw();
 	}
 	return false;
 }
 
-function DetectKeysUp(e)
-{
-	switch(e.keyCode)
-	{
-	case 37:    // left cursor
-	case 65:    // a
-		input.leftright = 0;
-		break;
-	case 39:    // right cursor
-	case 68:    // d
-		input.leftright = 0;
-		break;
-	case 38:    // cursor up
-	case 87:    // w
-		input.forwardbackward = 0;
-		break;
-	case 40:    // cursor down
-	case 83:    // s
-		input.forwardbackward = 0;
-		break;
-	case 82:    // r
-		input.updown = 0;
-		break;
-	case 70:    // f
-		input.updown = 0;
-		break;
-	case 69:    // e
-		input.lookup = false;
-		break;
-	case 81:    //q
-		input.lookdown = false;
-		break;
-	default:
-		return;
-		break;
+function detectKeysUp(e) {
+	switch(e.keyCode) {
+		case 37:	// left cursor
+		case 65:	// a
+			input.leftRight = 0;
+			break;
+		case 39:	// right cursor
+		case 68:	// d
+			input.leftRight = 0;
+			break;
+		case 38:	// cursor up
+		case 87:	// w
+			input.forwardBackward = 0;
+			break;
+		case 40:	// cursor down
+		case 83:	// s
+			input.forwardBackward = 0;
+			break;
+		case 82:	// r
+			input.upDown = 0;
+			break;
+		case 70:	// f
+			input.upDown = 0;
+			break;
+		case 69:	// e
+			input.lookUp = false;
+			break;
+		case 81:	//q
+			input.lookDown = false;
+			break;
+		default:
+			return;
+			break;
 	}
 	return false;
 }
@@ -240,107 +228,102 @@ function DetectKeysUp(e)
 // ---------------------------------------------
 // Fast way to draw vertical lines
 
-function DrawVerticalLine(x, ytop, ybottom, col)
-{
+function drawVerticalLine(x, ytop, ybottom, col) {
 	x = x|0;
 	ytop = ytop|0;
 	ybottom = ybottom|0;
 	col = col|0;
-	var buf32 = screendata.buf32;
-	var screenwidth = screendata.canvas.width|0;
-	if (ytop < 0) ytop = 0;
-	if (ytop > ybottom) return;
+	const buf32 = screen.buf32;
+	const screenWidth = screen.canvas.width|0;
+	if (ytop < 0) { ytop = 0; }
+	if (ytop > ybottom) { return; }
 
 	// get offset on screen for the vertical line
-	var offset = ((ytop * screenwidth) + x)|0;
-	for (var k = ytop|0; k < ybottom|0; k=k+1|0)
-	{
+	let offset = ((ytop * screenWidth) + x)|0;
+	for (let k = ytop|0; k < ybottom|0; k=k+1|0) {
 		buf32[offset|0] = col|0;
-		offset = offset + screenwidth|0;
+		offset = offset + screenWidth|0;
 	}
 }
 
 // ---------------------------------------------
 // Basic screen handling
 
-function DrawBackground()
-{
-	var buf32 = screendata.buf32;
-	var color = screendata.backgroundcolor|0;
-	for (var i = 0; i < buf32.length; i++) buf32[i] = color|0;
+function drawBackground() {
+	const buf32 = screen.buf32;
+	const color = screen.backgroundColor|0;
+	for (let i = 0; i < buf32.length; i++) {
+		buf32[i] = color|0;
+	}
 }
 
 // Show the back buffer on screen
-function Flip()
-{
-	screendata.imagedata.data.set(screendata.buf8);
-	screendata.context.putImageData(screendata.imagedata, 0, 0);
+function flip() {
+	screen.imageData.data.set(screen.buf8);
+	screen.context.putImageData(screen.imageData, 0, 0);
 }
 
 // ---------------------------------------------
 // The main render routine
 
-function Render()
-{
-	var mapwidthperiod = map.width - 1;
-	var mapheightperiod = map.height - 1;
+function render() {
+	const mapWidthPeriod = map.width - 1;
+	const mapHeightPeriod = map.height - 1;
 
-	var screenwidth = screendata.canvas.width|0;
-	var sinang = Math.sin(camera.angle);
-	var cosang = Math.cos(camera.angle);
+	const screenWidth = screen.canvas.width|0;
+	const sinAng = Math.sin(camera.angle);
+	const cosAng = Math.cos(camera.angle);
 
-	var hiddeny = new Int32Array(screenwidth);
-	for(var i=0; i<screendata.canvas.width|0; i=i+1|0)
-		hiddeny[i] = screendata.canvas.height;
+	const hiddenY = new Int32Array(screenWidth);
+	for(let i=0; i<screen.canvas.width|0; i=i+1|0) {
+		hiddenY[i] = screen.canvas.height;
+	}
 
-	var deltaz = 1.;
+	let deltaZ = 1.;
 
-	// Draw from front to back
-	for(var z=1; z<camera.distance; z+=deltaz)
-	{
+	// draw from front to back
+	for(let z=1; z<camera.distance; z+=deltaZ) {
 		// 90 degree field of view
-		var plx =  -cosang * z - sinang * z;
-		var ply =   sinang * z - cosang * z;
-		var prx =   cosang * z - sinang * z;
-		var pry =  -sinang * z - cosang * z;
+		let plx =  -cosAng * z - sinAng * z;
+		let ply =   sinAng * z - cosAng * z;
+		const prx =   cosAng * z - sinAng * z;
+		const pry =  -sinAng * z - cosAng * z;
 
-		var dx = (prx - plx) / screenwidth;
-		var dy = (pry - ply) / screenwidth;
+		const dx = (prx - plx) / screenWidth;
+		const dy = (pry - ply) / screenWidth;
 		plx += camera.x;
 		ply += camera.y;
-		var invz = 1. / z * 240.;
-		for(var i=0; i<screenwidth|0; i=i+1|0)
-		{
-			var mapoffset = ((Math.floor(ply) & mapwidthperiod) << map.shift) + (Math.floor(plx) & mapheightperiod)|0;
-			var heightonscreen = (camera.height - map.altitude[mapoffset]) * invz + camera.horizon|0;
-			DrawVerticalLine(i, heightonscreen|0, hiddeny[i], map.color[mapoffset]);
-			if (heightonscreen < hiddeny[i]) hiddeny[i] = heightonscreen;
+		const invz = 1. / z * 240.;
+		for(let i=0; i<screenWidth|0; i=i+1|0) {
+			const mapOffset = ((Math.floor(ply) & mapWidthPeriod) << map.shift) + (Math.floor(plx) & mapHeightPeriod)|0;
+			let heightOnScreen = (camera.height - map.altitude[mapOffset]) * invz + camera.horizon|0;
+			drawVerticalLine(i, heightOnScreen|0, hiddenY[i], map.color[mapOffset]);
+			if (heightOnScreen < hiddenY[i]) {
+				hiddenY[i] = heightOnScreen;
+			}
 			plx += dx;
 			ply += dy;
 		}
-		deltaz += 0.005;
+		deltaZ += 0.005;
 	}
 }
 
 
 // ---------------------------------------------
-// Draw the next frame
+// draw the next frame
 
-function Draw()
-{
-	updaterunning = true;
-	UpdateCamera();
-	DrawBackground();
-	Render();
-	Flip();
+function draw() {
+	updateRunning = true;
+	updateCamera();
+	drawBackground();
+	render();
+	flip();
 	frames++;
 
-	if (!input.keypressed)
-	{
-		updaterunning = false;
-	} else
-	{
-		window.setTimeout(Draw, 0);
+	if (!input.keyPressed) {
+		updateRunning = false;
+	} else {
+		window.setTimeout(draw, 0);
 	}
 }
 
@@ -348,25 +331,24 @@ function Draw()
 // Init routines
 
 // Util class for downloading the png
-function DownloadImagesAsync(urls) {
+function downloadImagesAsync(urls) {
 	return new Promise(function(resolve, reject) {
-
-		var pending = urls.length;
-		var result = [];
+		let pending = urls.length;
+		const result = [];
 		if (pending === 0) {
 			resolve([]);
 			return;
 		}
 		urls.forEach(function(url, i) {
-			var image = new Image();
+			const image = new Image();
 			//image.addEventListener("load", function() {
 			image.onload = function() {
-				var tempcanvas = document.createElement("canvas");
-				var tempcontext = tempcanvas.getContext("2d");
-				tempcanvas.width = map.width;
-				tempcanvas.height = map.height;
-				tempcontext.drawImage(image, 0, 0, map.width, map.height);
-				result[i] = tempcontext.getImageData(0, 0, map.width, map.height).data;
+				const tempCanvas = document.createElement("canvas");
+				const tempContext = tempCanvas.getContext("2d");
+				tempCanvas.width = map.width;
+				tempCanvas.height = map.height;
+				tempContext.drawImage(image, 0, 0, map.width, map.height);
+				result[i] = tempContext.getImageData(0, 0, map.width, map.height).data;
 				pending--;
 				if (pending === 0) {
 					resolve(result);
@@ -377,78 +359,68 @@ function DownloadImagesAsync(urls) {
 	});
 }
 
-function LoadMap(filenames)
-{
-	var files = filenames.split(";");
-	DownloadImagesAsync(["maps/"+files[0]+".png", "maps/"+files[1]+".png"]).then(OnLoadedImages);
+function loadMap(filenames) {
+	const files = filenames.split(";");
+	downloadImagesAsync(["maps/"+files[0]+".png", "maps/"+files[1]+".png"]).then(onLoadedImages);
 }
 
-function OnLoadedImages(result)
-{
-	var datac = result[0];
-	var datah = result[1];
-	for(var i=0; i<map.width*map.height; i++)
-	{
+function onLoadedImages(result) {
+	const datac = result[0];
+	const datah = result[1];
+	for(let i=0; i<map.width*map.height; i++) {
 		map.color[i] = 0xFF000000 | (datac[(i<<2) + 2] << 16) | (datac[(i<<2) + 1] << 8) | datac[(i<<2) + 0];
 		map.altitude[i] = datah[i<<2];
 	}
-	Draw();
+	draw();
 }
 
-function OnResizeWindow()
-{
-	screendata.canvas = document.getElementById('fullscreenCanvas');
+function onResizeWindow() {
+	screen.canvas = document.getElementById('fullscreenCanvas');
 
-	var aspect = window.innerWidth / window.innerHeight;
+	const aspect = window.innerWidth / window.innerHeight;
 
-	screendata.canvas.width = window.innerWidth<800?window.innerWidth:800;
-	screendata.canvas.height = screendata.canvas.width / aspect;
+	screen.canvas.width = window.innerWidth<800?window.innerWidth:800;
+	screen.canvas.height = screen.canvas.width / aspect;
 
-	if (screendata.canvas.getContext)
-	{
-		screendata.context = screendata.canvas.getContext('2d');
-		screendata.imagedata = screendata.context.createImageData(screendata.canvas.width, screendata.canvas.height);
+	if (screen.canvas.getContext) {
+		screen.context = screen.canvas.getContext('2d');
+		screen.imageData = screen.context.createImageData(screen.canvas.width, screen.canvas.height);
 	}
 
-	screendata.bufarray = new ArrayBuffer(screendata.imagedata.width * screendata.imagedata.height * 4);
-	screendata.buf8     = new Uint8Array(screendata.bufarray);
-	screendata.buf32    = new Uint32Array(screendata.bufarray);
-	Draw();
+	screen.bufArray = new ArrayBuffer(screen.imageData.width * screen.imageData.height * 4);
+	screen.buf8     = new Uint8Array(screen.bufArray);
+	screen.buf32    = new Uint32Array(screen.bufArray);
+	draw();
 }
 
-function Init()
-{
-	for(var i=0; i<map.width*map.height; i++)
-	{
+function init() {
+	for(let i=0; i<map.width*map.height; i++) {
 		map.color[i] = 0xFF007050;
 		map.altitude[i] = 0;
 	}
 
-	LoadMap("C1W;D1");
-	OnResizeWindow();
+	loadMap("C1W;D1");
+	onResizeWindow();
 
 	// set event handlers for keyboard, mouse, touchscreen and window resize
-	var canvas = document.getElementById("fullscreenCanvas");
-	canvas.onkeydown    = DetectKeysDown;
-	canvas.onkeyup      = DetectKeysUp;
-	canvas.onmousedown  = DetectMouseDown;
-	canvas.onmouseup    = DetectMouseUp;
-	canvas.onmousemove  = DetectMouseMove;
-	canvas.ontouchstart = DetectMouseDown;
-	canvas.ontouchend   = DetectMouseUp;
-	canvas.ontouchmove  = DetectMouseMove;
+	const canvas = document.getElementById("fullscreenCanvas");
+	canvas.onkeydown    = detectKeysDown;
+	canvas.onkeyup      = detectKeysUp;
+	canvas.onmousedown  = detectMouseDown;
+	canvas.onmouseup    = detectMouseUp;
+	canvas.onmousemove  = detectMouseMove;
+	canvas.ontouchstart = detectMouseDown;
+	canvas.ontouchend   = detectMouseUp;
+	canvas.ontouchmove  = detectMouseMove;
 
-	window.onresize       = OnResizeWindow;
+	window.onresize = onResizeWindow;
 
 	window.setInterval(function(){
-		var current = new Date().getTime();
-		document.getElementById('fps').innerText = (frames / (current-timelastframe) * 1000).toFixed(1) + " fps";
+		const current = new Date().getTime();
+		document.getElementById('fps').innerText = (frames / (current-timeLastFrame) * 1000).toFixed(1) + " fps";
 		frames = 0;
-		timelastframe = current;
+		timeLastFrame = current;
 	}, 2000);
-
 }
-
-Init();
 
 })();
