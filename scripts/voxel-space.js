@@ -1,4 +1,4 @@
-(function(){
+var comanche = (function(){
 
 "use strict";
 
@@ -43,6 +43,33 @@ const screen = {
 // ---------------------------------------------
 // Keyboard and mouse interaction
 
+const keyInstructions = {
+	'a':			'left',
+	65:				'left',
+	'ArrowLeft': 	'left',
+	37:				'left',
+	'd':			'right',
+	68:				'right',
+	'ArrowRight':	'right',
+	39:				'right',
+	'w':			'forward',
+	87:				'forward',
+	'ArrowUp':		'forward',
+	38:				'forward',
+	's':			'backward',
+	83:				'backward',
+	'ArrowDown':	'backward',
+	40:				'backward',
+	'r':			'up',
+	82:				'up',
+	'f':			'down',
+	70:				'down',
+	'e':			'lookUp',
+	69:				'lookUp',
+	'q':			'lookDown',
+	81:				'lookDown'
+};
+
 const input = {
 	forwardBackward: 0,
 	leftRight:       0,
@@ -60,7 +87,10 @@ let frames = 0;
 
 init();
 
-return;
+return {
+	camera, map, screen, input,
+	loadMap
+};
 
 // Update the camera for next frame. Dependent on keypresses
 function updateCamera() {
@@ -69,27 +99,21 @@ function updateCamera() {
 	const deltaTime = current - time;
 	const deltaMovement = deltaTime * movementScale;
 
-	input.keyPressed = false;
 	if (input.leftRight != 0) {
 		camera.angle += input.leftRight * 0.1 * deltaMovement;
-		input.keyPressed = true;
 	}
 	if (input.forwardBackward != 0) {
 		camera.x -= input.forwardBackward * Math.sin(camera.angle) * deltaMovement;
 		camera.y -= input.forwardBackward * Math.cos(camera.angle) * deltaMovement;
-		input.keyPressed = true;
 	}
 	if (input.upDown != 0) {
 		camera.height += input.upDown * deltaMovement;
-		input.keyPressed = true;
 	}
 	if (input.lookUp) {
-		camera.horizon += 2 * deltaMovement;
-		input.keyPressed = true;
+		camera.horizon += 4 * deltaMovement;
 	}
 	if (input.lookDown) {
-		camera.horizon -= 2 * deltaMovement;
-		input.keyPressed = true;
+		camera.horizon -= 4 * deltaMovement;
 	}
 
 	// Collision detection. Don't fly below the surface.
@@ -122,7 +146,9 @@ function detectMouseDown(e) {
 	input.mousePosition = getMousePosition(e);
 	time = new Date().getTime();
 
-	if (!updateRunning) draw();
+	if (!updateRunning) {
+		drawFrame();
+	}
 	return;
 }
 
@@ -146,76 +172,69 @@ function detectMouseMove(e) {
 	input.upDown    = (input.mousePosition[1] - currentMousePosition[1]) / window.innerHeight * 10;
 }
 
+function getEventKeyInstruction(e) {
+	const key = e.key || e.keyCode;
+	const instruction = keyInstructions[key];
+	return instruction;	
+}
+
 function detectKeysDown(e) {
-	switch(e.keyCode) {
-	case 37:    // left cursor
-	case 65:    // a
-		input.leftRight = +1.;
-		break;
-	case 39:    // right cursor
-	case 68:    // d
-		input.leftRight = -1.;
-		break;
-	case 38:    // cursor up
-	case 87:    // w
-		input.forwardBackward = 3.;
-		break;
-	case 40:    // cursor down
-	case 83:    // s
-		input.forwardBackward = -3.;
-		break;
-	case 82:    // r
-		input.upDown = +2.;
-		break;
-	case 70:    // f
-		input.upDown = -2.;
-		break;
-	case 69:    // e
-		input.lookUp = true;
-		break;
-	case 81:    //q
-		input.lookDown = true;
-		break;
-	default:
-		return;
-		break;
+	input.keyPressed = true;
+	switch(getEventKeyInstruction(e)) {
+		case 'left':
+			input.leftRight = +1.;
+			break;
+		case 'right':
+			input.leftRight = -1.;
+			break;
+		case 'forward':
+			input.forwardBackward = 3.;
+			break;
+		case 'backward':
+			input.forwardBackward = -3.;
+			break;
+		case 'up':
+			input.upDown = +2.;
+			break;
+		case 'down':
+			input.upDown = -2.;
+			break;
+		case 'lookUp':
+			input.lookUp = true;
+			break;
+		case 'lookDown':
+			input.lookDown = true;
+			break;
+		default:
+			return;
+			break;
 	}
 
 	if (!updateRunning) {
 		time = new Date().getTime();
-		draw();
+		drawFrame();
 	}
 	return false;
 }
 
 function detectKeysUp(e) {
-	switch(e.keyCode) {
-		case 37:	// left cursor
-		case 65:	// a
+	switch(getEventKeyInstruction(e)) {
+		case 'left':
+		case 'right':
 			input.leftRight = 0;
 			break;
-		case 39:	// right cursor
-		case 68:	// d
-			input.leftRight = 0;
-			break;
-		case 38:	// cursor up
-		case 87:	// w
+		case 'forward':
+		case 'backward':
 			input.forwardBackward = 0;
 			break;
-		case 40:	// cursor down
-		case 83:	// s
-			input.forwardBackward = 0;
-			break;
-		case 82:	// r
+		case 'up':
+		case 'down':
 			input.upDown = 0;
 			break;
-		case 70:	// f
-			input.upDown = 0;
-			break;
-		case 69:	// e
+		case 'lookUp':
 			input.lookUp = false;
 			break;
-		case 81:	//q
+		case 'lookDown':
 			input.lookDown = false;
 			break;
 		default:
@@ -312,7 +331,7 @@ function render() {
 // ---------------------------------------------
 // draw the next frame
 
-function draw() {
+function drawFrame() {
 	updateRunning = true;
 	updateCamera();
 	drawBackground();
@@ -323,7 +342,7 @@ function draw() {
 	if (!input.keyPressed) {
 		updateRunning = false;
 	} else {
-		window.setTimeout(draw, 0);
+		window.setTimeout(drawFrame, 0);
 	}
 }
 
@@ -341,7 +360,6 @@ function downloadImagesAsync(urls) {
 		}
 		urls.forEach(function(url, i) {
 			const image = new Image();
-			//image.addEventListener("load", function() {
 			image.onload = function() {
 				const tempCanvas = document.createElement("canvas");
 				const tempContext = tempCanvas.getContext("2d");
@@ -371,10 +389,14 @@ function onLoadedImages(result) {
 		map.color[i] = 0xFF000000 | (datac[(i<<2) + 2] << 16) | (datac[(i<<2) + 1] << 8) | datac[(i<<2) + 0];
 		map.altitude[i] = datah[i<<2];
 	}
-	draw();
+	drawFrame();
 }
 
 function onResizeWindow() {
+	setupScreen();
+}
+
+function setupScreen() {
 	screen.canvas = document.getElementById('fullscreenCanvas');
 
 	const aspect = window.innerWidth / window.innerHeight;
@@ -390,7 +412,7 @@ function onResizeWindow() {
 	screen.bufArray = new ArrayBuffer(screen.imageData.width * screen.imageData.height * 4);
 	screen.buf8     = new Uint8Array(screen.bufArray);
 	screen.buf32    = new Uint32Array(screen.bufArray);
-	draw();
+	drawFrame();
 }
 
 function init() {
@@ -400,27 +422,28 @@ function init() {
 	}
 
 	loadMap("C1W;D1");
-	onResizeWindow();
+	setupScreen();
 
 	// set event handlers for keyboard, mouse, touchscreen and window resize
 	const canvas = document.getElementById("fullscreenCanvas");
-	canvas.onkeydown    = detectKeysDown;
-	canvas.onkeyup      = detectKeysUp;
-	canvas.onmousedown  = detectMouseDown;
-	canvas.onmouseup    = detectMouseUp;
-	canvas.onmousemove  = detectMouseMove;
-	canvas.ontouchstart = detectMouseDown;
-	canvas.ontouchend   = detectMouseUp;
-	canvas.ontouchmove  = detectMouseMove;
+	canvas.onmousedown	= detectMouseDown;
+	canvas.onmouseup	= detectMouseUp;
+	canvas.onmousemove	= detectMouseMove;
+	canvas.ontouchstart	= detectMouseDown;
+	canvas.ontouchend	= detectMouseUp;
+	canvas.ontouchmove	= detectMouseMove;
+	document.addEventListener('keydown', detectKeysDown);
+	document.addEventListener('keyup', detectKeysUp);
+	window.onresize		= onResizeWindow;
 
-	window.onresize = onResizeWindow;
+	window.setInterval(updateFramesPerSecond, 2000);
+}
 
-	window.setInterval(function(){
-		const current = new Date().getTime();
-		document.getElementById('fps').innerText = (frames / (current-timeLastFrame) * 1000).toFixed(1) + " fps";
-		frames = 0;
-		timeLastFrame = current;
-	}, 2000);
+function updateFramesPerSecond() {
+	const current = new Date().getTime();
+	document.getElementById('fps').innerText = (frames / (current-timeLastFrame) * 1000).toFixed(1) + " fps";
+	frames = 0;
+	timeLastFrame = current;	
 }
 
 })();
