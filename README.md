@@ -363,5 +363,5 @@ The software part of the repository is under the MIT license. Please read the li
 Updates contributed in 2018 by Luke Nicerson; code still under MIT license.
 
 
-[project demo]: https://lukenickerson.github.io/VoxelSpace/index.html
+[project demo]: https://lukenickerson.github.io/VoxelSpace/
 [original project demo]: https://s-macke.github.io/VoxelSpace/VoxelSpace.html
