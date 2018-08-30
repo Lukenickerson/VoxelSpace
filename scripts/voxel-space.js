@@ -9,8 +9,10 @@ const camera = {
 	x:			512., // x position on the map
 	y:			800., // y position on the map
 	height:		78., // height of the camera
+	heightOffset: 10, // distance above ground
 	angle:		0., // direction of the camera
 	horizon:	100., // horizon position (look up and down)
+	baseHorizon: 100.,
 	distance:	800   // distance of map
 };
 
@@ -43,68 +45,48 @@ const screen = {
 // ---------------------------------------------
 // Keyboard and mouse interaction
 
-const keyInstructions = {
-	'a':			'left',
-	65:				'left',
-	'ArrowLeft': 	'left',
-	37:				'left',
-	'd':			'right',
-	68:				'right',
-	'ArrowRight':	'right',
-	39:				'right',
-	'w':			'forward',
-	87:				'forward',
-	'ArrowUp':		'forward',
-	38:				'forward',
-	's':			'backward',
-	83:				'backward',
-	'ArrowDown':	'backward',
-	40:				'backward',
-	'r':			'up',
-	82:				'up',
-	'f':			'down',
-	70:				'down',
-	'e':			'lookUp',
-	69:				'lookUp',
-	'q':			'lookDown',
-	81:				'lookDown'
-};
+const input = new Input();
 
-const input = {
-	forwardBackward: 0,
-	leftRight:       0,
-	upDown:          0,
-	lookUp:          false,
-	lookDown:        false,
-	mousePosition:   null,
-	keyPressed:      false
-};
+input.anyKeyDownAction = startDrawFrameLoop;
+input.updateCameraHorizon = (h) => camera.horizon = h;
+input.zAction = () => setGravityOn(!gravityOn);
 
+let gravityAcceleration = 0;
+let gravityOn = false;
 let updateRunning = false;
 let time = new Date().getTime();
 let timeLastFrame = new Date().getTime(); // for fps display
 let frames = 0;
+let speed = 3;
 
 init();
 
 return {
 	camera, map, screen, input,
-	loadMap
+	loadMap, setGravityOn
 };
 
+function setGravityOn(on) {
+	document.getElementsByName('gravityOn')[0].checked = on;
+	gravityOn = on;
+	startDrawFrameLoop();
+}
+
 // Update the camera for next frame. Dependent on keypresses
-function updateCamera() {
+function updateCamera(input) {
 	const current = new Date().getTime();
 	const movementScale = 0.03;
 	const deltaTime = current - time;
 	const deltaMovement = deltaTime * movementScale;
+	const original = {x: camera.x, y: camera.y, height: camera.height};
+	const moved = (input.forwardBackward !== 0);
 
 	if (input.leftRight != 0) {
 		camera.angle += input.leftRight * 0.1 * deltaMovement;
 	}
-	if (input.forwardBackward != 0) {
-		camera.x -= input.forwardBackward * Math.sin(camera.angle) * deltaMovement;
-		camera.y -= input.forwardBackward * Math.cos(camera.angle) * deltaMovement;
+	if (moved) {
+		camera.x -= input.forwardBackward * speed * Math.sin(camera.angle) * deltaMovement;
+		camera.y -= input.forwardBackward * speed * Math.cos(camera.angle) * deltaMovement;
 	}
 	if (input.upDown != 0) {
 		camera.height += input.upDown * deltaMovement;
@@ -115,133 +97,33 @@ function updateCamera() {
 	if (input.lookDown) {
 		camera.horizon -= 4 * deltaMovement;
 	}
-
+	
 	// Collision detection. Don't fly below the surface.
-	const mapOffset = ((Math.floor(camera.y) & (map.width-1)) << map.shift) + (Math.floor(camera.x) & (map.height-1))|0;
-	const minZ = map.altitude[mapOffset] + 10;
+	const minZ = getMapZ(camera.x, camera.y) + camera.heightOffset;
+	if (gravityOn && camera.height > minZ) {
+		gravityAcceleration -= 0.0002 * deltaTime;
+		camera.height += gravityAcceleration * deltaTime;
+	} else {
+		gravityAcceleration = 0;
+	}
 	if (minZ > camera.height) {
 		camera.height = minZ;
 	}
+	if (minZ === camera.height && gravityOn && moved) {
+		if (original.height === camera.height) { // level
+			camera.horizon += (camera.horizon - camera.baseHorizon) / -10;
+			camera.horizon = Math.round(camera.horizon);
+		} else {
+			camera.horizon += (camera.height - original.height) * 3;
+		}
+	}
 
 	time = current;
-
 }
 
-// ---------------------------------------------
-// Keyboard and mouse event handlers
-// ---------------------------------------------
-// Keyboard and mouse event handlers
-
-function getMousePosition(e) {
-	// fix for Chrome
-	if (e.type.startsWith('touch')) {
-		return [e.targetTouches[0].pageX, e.targetTouches[0].pageY];
-	} else {
-		return [e.pageX, e.pageY];
-	}
-}
-
-function detectMouseDown(e) {
-	input.forwardBackward = 3.;
-	input.mousePosition = getMousePosition(e);
-	time = new Date().getTime();
-
-	if (!updateRunning) {
-		drawFrame();
-	}
-	return;
-}
-
-function detectMouseUp() {
-	input.mousePosition = null;
-	input.forwardBackward = 0;
-	input.leftRight = 0;
-	input.upDown = 0;
-	return;
-}
-
-function detectMouseMove(e) {
-	e.preventDefault();
-	if (input.mousePosition == null) { return; }
-	if (input.forwardBackward == 0) { return; }
-
-	const currentMousePosition = getMousePosition(e);
-
-	input.leftRight = (input.mousePosition[0] - currentMousePosition[0]) / window.innerWidth * 2;
-	camera.horizon  = 100 + (input.mousePosition[1] - currentMousePosition[1]) / window.innerHeight * 500;
-	input.upDown    = (input.mousePosition[1] - currentMousePosition[1]) / window.innerHeight * 10;
-}
-
-function getEventKeyInstruction(e) {
-	const key = e.key || e.keyCode;
-	const instruction = keyInstructions[key];
-	return instruction;	
-}
-
-function detectKeysDown(e) {
-	input.keyPressed = true;
-	switch(getEventKeyInstruction(e)) {
-		case 'left':
-			input.leftRight = +1.;
-			break;
-		case 'right':
-			input.leftRight = -1.;
-			break;
-		case 'forward':
-			input.forwardBackward = 3.;
-			break;
-		case 'backward':
-			input.forwardBackward = -3.;
-			break;
-		case 'up':
-			input.upDown = +2.;
-			break;
-		case 'down':
-			input.upDown = -2.;
-			break;
-		case 'lookUp':
-			input.lookUp = true;
-			break;
-		case 'lookDown':
-			input.lookDown = true;
-			break;
-		default:
-			return;
-			break;
-	}
-
-	if (!updateRunning) {
-		time = new Date().getTime();
-		drawFrame();
-	}
-	return false;
-}
-
-function detectKeysUp(e) {
-	switch(getEventKeyInstruction(e)) {
-		case 'left':
-		case 'right':
-			input.leftRight = 0;
-			break;
-		case 'forward':
-		case 'backward':
-			input.forwardBackward = 0;
-			break;
-		case 'up':
-		case 'down':
-			input.upDown = 0;
-			break;
-		case 'lookUp':
-			input.lookUp = false;
-			break;
-		case 'lookDown':
-			input.lookDown = false;
-			break;
-		default:
-			return;
-			break;
-	}
-	return false;
+function getMapZ(x, y) {
+	const mapOffset = ((Math.floor(y) & (map.width-1)) << map.shift) + (Math.floor(x) & (map.height-1))|0;
+	return map.altitude[mapOffset];
 }
 
 // ---------------------------------------------
@@ -285,7 +167,7 @@ function flip() {
 // ---------------------------------------------
 // The main render routine
 
-function render() {
+function render(screen, map, camera) {
 	const mapWidthPeriod = map.width - 1;
 	const mapHeightPeriod = map.height - 1;
 
@@ -333,9 +215,9 @@ function render() {
 
 function drawFrame() {
 	updateRunning = true;
-	updateCamera();
+	updateCamera(input);
 	drawBackground();
-	render();
+	render(screen, map, camera);
 	flip();
 	frames++;
 
@@ -343,6 +225,13 @@ function drawFrame() {
 		updateRunning = false;
 	} else {
 		window.setTimeout(drawFrame, 0);
+	}
+}
+
+function startDrawFrameLoop() {
+	if (!updateRunning) {
+		time = new Date().getTime();
+		drawFrame();
 	}
 }
 
@@ -426,17 +315,11 @@ function init() {
 
 	// set event handlers for keyboard, mouse, touchscreen and window resize
 	const canvas = document.getElementById("fullscreenCanvas");
-	canvas.onmousedown	= detectMouseDown;
-	canvas.onmouseup	= detectMouseUp;
-	canvas.onmousemove	= detectMouseMove;
-	canvas.ontouchstart	= detectMouseDown;
-	canvas.ontouchend	= detectMouseUp;
-	canvas.ontouchmove	= detectMouseMove;
-	document.addEventListener('keydown', detectKeysDown);
-	document.addEventListener('keyup', detectKeysUp);
-	window.onresize		= onResizeWindow;
+	input.init(canvas, document);
+	window.onresize = onResizeWindow;
 
 	window.setInterval(updateFramesPerSecond, 2000);
+	startDrawFrameLoop();
 }
 
 function updateFramesPerSecond() {
